@@ -1,17 +1,23 @@
 /* eslint-disable @next/next/no-img-element */
-import { DocumentIcon } from "@heroicons/react/24/solid";
-import { List, Modal, Tooltip } from "@mantine/core";
+import { QuestionMarkCircleIcon } from "@heroicons/react/24/outline";
 import { showNotification } from "@mantine/notifications";
+import * as Mui from "@mui/material";
+import { TRPCClientError } from "@trpc/client";
 import { type NextPage } from "next";
 import { useSession } from "next-auth/react";
-import React, { useState } from "react";
-import { Inventory, Item } from "../../server/types";
+import { useState } from "react";
+import Inventory from "../../components/player/Inventory";
+import type { InventorySlotPayload } from "../../server/lib/market/serialization";
 import { trpc } from "../../utils/trpc";
 
 const Market: NextPage = () => {
   const { data: sessionData, status: sessionStatus } = useSession();
 
   const inventoryQuery = trpc.market.inventory.useQuery(undefined, {
+    refetchInterval: 1000,
+  });
+
+  const balanceQuery = trpc.market.balance.useQuery(undefined, {
     refetchInterval: 1000,
   });
 
@@ -23,10 +29,12 @@ const Market: NextPage = () => {
   );
 
   const sellItemMutation = trpc.market.sellItem.useMutation();
+  const depositDiamondsMutation = trpc.market.depositDiamonds.useMutation();
 
-  const [opened, setOpened] = useState(false);
+  const [sellItemModalOpened, setItemModalOpened] = useState(false);
+
   const [price, setPrice] = useState(1);
-  const [item, setItem] = useState<Item | null>(null);
+  const [item, setItem] = useState<InventorySlotPayload>(null);
 
   if (sessionStatus === "loading") {
     return <div>Loading...</div>;
@@ -36,151 +44,180 @@ const Market: NextPage = () => {
     return <div>Not signed in</div>;
   }
 
-  const handleItemClick = async (item: Item | null) => {
+  const handleItemClick = async (item: InventorySlotPayload) => {
     if (item) {
       setItem(item);
-      setOpened(true);
+      setItemModalOpened(true);
     }
   };
 
   const handleItemSell = async () => {
-    if (item) {
-      await sellItemMutation.mutateAsync({
-        index: item.index,
-        price,
-      });
+    try {
+      if (item) {
+        await sellItemMutation.mutateAsync({
+          index: item.index,
+          price,
+        });
 
-      setItem(null);
-      setOpened(false);
+        setItem(null);
+        setItemModalOpened(false);
+
+        showNotification({
+          message: "Item sold",
+        });
+
+        inventoryQuery.refetch();
+      }
+    } catch (e) {
+      if (e instanceof TRPCClientError) {
+        showNotification({
+          message: e.message,
+          color: "red",
+        });
+      }
+    }
+  };
+
+  const handleDeposit = async () => {
+    try {
+      await depositDiamondsMutation.mutateAsync();
 
       showNotification({
-        message: "Item sold",
+        message: "Diamonds deposited",
       });
-
-      inventoryQuery.refetch();
+    } catch (e) {
+      if (e instanceof TRPCClientError) {
+        showNotification({
+          message: e.message,
+          color: "red",
+        });
+      }
     }
   };
 
   return (
     <>
-      <Modal opened={opened} onClose={() => setOpened(false)} title="Sell item">
-        <div className="flex flex-col gap-2">
-          <input
+      <Mui.Dialog
+        open={sellItemModalOpened}
+        onClose={() => setItemModalOpened(false)}
+        aria-labelledby="form-dialog-title"
+      >
+        <Mui.DialogTitle id="form-dialog-title">Sell item</Mui.DialogTitle>
+        <Mui.DialogContent>
+          <Mui.DialogContentText>
+            Enter the price you want to sell the item for
+          </Mui.DialogContentText>
+          <Mui.TextField
+            autoFocus
+            margin="dense"
+            id="price"
+            label="Price"
             type="number"
+            fullWidth
             value={price}
             onChange={(e) => setPrice(Number(e.target.value))}
           />
-          <button onClick={handleItemSell}>Sell</button>
-        </div>
-      </Modal>
+        </Mui.DialogContent>
+        <Mui.DialogActions>
+          <Mui.Button onClick={() => setItemModalOpened(false)} color="primary">
+            Cancel
+          </Mui.Button>
+          <Mui.Button onClick={handleItemSell} color="primary">
+            Sell
+          </Mui.Button>
+        </Mui.DialogActions>
+      </Mui.Dialog>
 
-      <h1 className="mb-4 text-4xl font-bold">Market</h1>
+      <Mui.Container>
+        <Mui.Grid container spacing={3}>
+          <Mui.Grid item xs={12}>
+            <Mui.Typography variant="h3" component="h3">
+              you have {balanceQuery.data ?? "Loading..."} diamonds
+            </Mui.Typography>
+            <Mui.Button onClick={handleDeposit}>Deposit diamonds</Mui.Button>
+          </Mui.Grid>
+          <Mui.Grid item xs={12}>
+            <Mui.Typography variant="body1" component="p">
+              This is your current inventory (or an error message if you&apos;re
+              not online), click items to publish them.{" "}
+              <span className="text-red-500">
+                warning: you probably don&apos;t want to do that, the market is
+                a work in progress and you may lose your items
+              </span>
+            </Mui.Typography>
+          </Mui.Grid>
+          <Mui.Grid item xs={12}>
+            {inventoryQuery.isLoading && <div>Loading...</div>}
+            {inventoryQuery.isError && <div>Error</div>}
+            {inventoryQuery.data && (
+              <Inventory
+                inventory={inventoryQuery.data}
+                onClick={handleItemClick}
+              />
+            )}
+          </Mui.Grid>
+          <Mui.Grid item xs={12}>
+            <Mui.Typography variant="h2" component="h2">
+              Discovered Items
+            </Mui.Typography>
+          </Mui.Grid>
+          <Mui.Grid item xs={12}>
+            <Mui.Typography variant="body1" component="p">
+              These are the items the market has &quot;discovered&quot;. Items
+              are discovered from the first time a unique item is published.
+            </Mui.Typography>
+          </Mui.Grid>
 
-      <h2 className="mb-4 text-2xl font-bold">Inventory</h2>
+          <Mui.Grid item xs={12}>
+            {discoveredItemTypesQuery.isLoading && <div>Loading...</div>}
+            {discoveredItemTypesQuery.isError && <div>Error</div>}
+            {discoveredItemTypesQuery.data && (
+              <Mui.TableContainer component={Mui.Paper}>
+                <Mui.Table aria-label="simple table">
+                  <Mui.TableHead>
+                    <Mui.TableRow>
+                      <Mui.TableCell>Item</Mui.TableCell>
+                      <Mui.TableCell align="right">
+                        Cheapest Price
+                      </Mui.TableCell>
+                      <Mui.TableCell align="right">Sellers</Mui.TableCell>
+                    </Mui.TableRow>
+                  </Mui.TableHead>
+                  <Mui.TableBody>
+                    {discoveredItemTypesQuery.data.map((item, id) => (
+                      <Mui.TableRow key={id}>
+                        <Mui.TableCell component="th" scope="row">
+                          <Mui.Icon className="mr-2">
+                            {item.image ? (
+                              <img src={item.image} alt={item.name} />
+                            ) : (
+                              <QuestionMarkCircleIcon />
+                            )}
+                          </Mui.Icon>
 
-      <p className="mb-4">
-        This is your current inventory (or an error message if you&apos;re not
-        online), click items to publish them.{" "}
-        <span className="text-red-500">
-          warning: you probably don&apos;t want to do that, the market is a work
-          in progress and you may lose your items
-        </span>
-      </p>
+                          <Mui.Link href={`/market/${item.id}`}>
+                            {item.name}
+                          </Mui.Link>
+                        </Mui.TableCell>
 
-      {inventoryQuery.isLoading && <div>Loading...</div>}
+                        <Mui.TableCell align="right">
+                          {item.cheapest?.price ?? "N/A"} diamonds
+                        </Mui.TableCell>
 
-      {inventoryQuery.isError && <div>Error</div>}
-
-      {inventoryQuery.data && (
-        <Inventory inventory={inventoryQuery.data} onClick={handleItemClick} />
-      )}
-
-      <h2 className="mb-4 text-2xl font-bold">Discovered Items</h2>
-
-      <p className="mb-4">
-        These are the items the market has &quot;discovered&quot;. Items are
-        discovered from the first time a unique item is published.
-      </p>
-
-      {discoveredItemTypesQuery.isLoading && <div>Loading...</div>}
-      {discoveredItemTypesQuery.isError && <div>Error</div>}
-      {discoveredItemTypesQuery.data && (
-        <List>
-          {discoveredItemTypesQuery.data.map((item, id) => (
-            <List.Item
-              icon={
-                item.image ? (
-                  <img src={item.image} alt={item.name} />
-                ) : (
-                  <DocumentIcon />
-                )
-              }
-              key={id}
-            >
-              {item.name}
-            </List.Item>
-          ))}
-        </List>
-      )}
+                        <Mui.TableCell align="right">
+                          {item.sellers.length}
+                        </Mui.TableCell>
+                      </Mui.TableRow>
+                    ))}
+                  </Mui.TableBody>
+                </Mui.Table>
+              </Mui.TableContainer>
+            )}
+          </Mui.Grid>
+        </Mui.Grid>
+      </Mui.Container>
     </>
   );
 };
 
 export default Market;
-
-const Item: React.FC<{
-  item: Item | null;
-  onClick?: () => void;
-}> = ({ item, onClick }) => {
-  return (
-    <Tooltip label={item?.name ? `${item.name} (${item.amount})` : undefined}>
-      <div onClick={onClick} className="cursor-pointer">
-        {item ? (
-          <img className="h-10 w-10 border" src={item.image} alt={item.name} />
-        ) : (
-          <div className="h-10 w-10 border" />
-        )}
-      </div>
-    </Tooltip>
-  );
-};
-
-const Inventory: React.FC<{
-  inventory: Inventory;
-  onClick?: (item: Item | null) => void;
-}> = ({ inventory, onClick }) => {
-  const handleItemClick = (item: Item | null) => {
-    onClick?.(item);
-  };
-
-  return (
-    <div className="flex flex-row gap-1">
-      <div className="flex flex-col gap-1">
-        <div className="grid w-fit grid-cols-9 grid-rows-3 gap-1">
-          {inventory.inventory.map((item, id) => (
-            <Item key={id} item={item} onClick={() => handleItemClick(item)} />
-          ))}
-        </div>
-
-        <div className="grid w-fit grid-cols-9 grid-rows-1 gap-1">
-          {inventory.hotBar.map((item, id) => (
-            <Item key={id} item={item} onClick={() => handleItemClick(item)} />
-          ))}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <div className="grid w-fit grid-cols-1 grid-rows-4 gap-1">
-          {inventory.armor.map((item, id) => (
-            <Item key={id} item={item} onClick={() => handleItemClick(item)} />
-          ))}
-        </div>
-        <div className="grid w-fit grid-cols-1 grid-rows-1 gap-1">
-          {inventory.offHand.map((item, id) => (
-            <Item key={id} item={item} onClick={() => handleItemClick(item)} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};

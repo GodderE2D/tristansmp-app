@@ -20,20 +20,39 @@ const OnlinePlayers: Command = {
     interaction.reply({
       embeds: [
         {
-          title: "Playerlist",
+          title: "Server Info",
           description: [
-            "```json",
-            "[",
-            ...onlinePlayers.map((p) => `  "${p.name}",`),
-            "]",
-            "```",
+            `**Online Players:** (${onlinePlayers.length})`,
+            onlinePlayers
+              .map((player) => `• \`${player.name}\`\n\t\`${player.uuid}\``)
+              .join("\n"),
+            "",
+            "**Fun Facts:**",
+            `• There's \`${onlinePlayers.reduce(
+              (acc, player) =>
+                acc +
+                player.inventory.items
+                  .map((item) => item?.amount || 0)
+                  .reduce((a, b) => a + b, 0),
+              0
+            )}\` items loaded in the inventory of all players.`,
+            `• \`${onlinePlayers
+              .map((player) => player.name)
+              .reduce((a, b) =>
+                a.length > b.length ? a : b
+              )}\` has the longest name.`,
+            "",
+            "**Nerd Info:**",
+            `• Base MCV: \`${elytra.minecraftVersion}\``,
+            `• Paper Version: \`${elytra.bukkitVersion}\``,
+            `• Vercel Deployment: [\`${
+              process.env.VERCEL_GIT_COMMIT_SHA
+                ? process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7)
+                : "N/A"
+            }\`](${process.env.VERCEL_URL ?? "N/A"})`,
+            `• Node.js Version: \`${process.version}\``,
           ].join("\n"),
-          fields: [
-            {
-              name: "Players",
-              value: `${onlinePlayers.length}`,
-            },
-          ],
+
           color: EmbedColor.Invisible,
         },
       ],
