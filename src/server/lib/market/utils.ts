@@ -1,10 +1,27 @@
 import type { AuctionedItem, ItemType, User } from "@prisma/client";
 import { AuctionStatus } from "@prisma/client";
-import type { ItemStack, Player } from "elytra";
+import type { ItemStack } from "elytra";
+import type { z } from "zod";
 import { sha256 } from "../../../utils/hashing";
 import { prisma } from "../../db/client";
 import { BarrierTexture, ItemTextures } from "../textures";
+import { MarketItemMetadata } from "./schemas";
 import { MarketSerializer } from "./serialization";
+
+function createItemTypeMetadata(
+  item: ItemStack
+): z.infer<typeof MarketItemMetadata> {
+  return MarketItemMetadata.parse({
+    enchantments: Object.entries(item.enchantments).map(([id, level]) => ({
+      id,
+      level,
+    })),
+    name: item.name,
+    lore: [],
+    durability: item.durability,
+    amount: item.amount,
+  });
+}
 
 async function resolveItemType(item: ItemStack) {
   const hashedItem = sha256(item.base64);
@@ -18,6 +35,7 @@ async function resolveItemType(item: ItemStack) {
       b64key: hashedItem,
       name: item.name,
       namespacedId: item.id,
+      metadata: createItemTypeMetadata(item),
     },
     update: {},
     include: {
@@ -32,7 +50,14 @@ async function getItemType(hashedItem: string) {
       b64key: hashedItem,
     },
     include: {
-      stock: true,
+      stock: {
+        include: {
+          seller: true,
+        },
+        where: {
+          status: AuctionStatus.ACTIVE,
+        },
+      },
     },
   });
 }
@@ -73,7 +98,14 @@ function findItemTexture(namespacedId: string): string {
 async function getDiscoveredItemTypes() {
   const discoveredItems = await prisma.itemType.findMany({
     include: {
-      stock: true,
+      stock: {
+        include: {
+          seller: true,
+        },
+        where: {
+          status: AuctionStatus.ACTIVE,
+        },
+      },
     },
   });
 
@@ -87,8 +119,7 @@ async function buyItem(
     type: ItemType | null;
     seller: User;
   },
-  buyerUser: User,
-  buyerPlayer: Player
+  buyerUser: User
 ) {
   if (auctionedItem.status !== AuctionStatus.ACTIVE) {
     throw new Error("Item is not for sale");
@@ -106,6 +137,11 @@ async function buyItem(
     throw new Error("You cannot afford this item");
   }
 
+  /**
+   * Stage 1: Transactions
+   */
+
+  // Decrement buyer's balance
   await prisma.user.update({
     where: {
       id: buyerUser.id,
@@ -117,6 +153,7 @@ async function buyItem(
     },
   });
 
+  // Increment seller's balance
   await prisma.user.update({
     where: {
       id: auctionedItem.seller.id,
@@ -128,13 +165,17 @@ async function buyItem(
     },
   });
 
+  /**
+   * Stage 2: Modify item to be ready for delivery state
+   */
+
   try {
     await prisma.auctionedItem.update({
       where: {
         id: auctionedItem.id,
       },
       data: {
-        status: AuctionStatus.SOLD,
+        status: AuctionStatus.IN_TRANSIT,
         buyer: {
           connect: {
             id: buyerUser.id,
@@ -142,10 +183,10 @@ async function buyItem(
         },
       },
     });
-
-    await buyerPlayer.inventory.addItem(auctionedItem.type.base64);
   } catch (e) {
-    throw new Error("Failed to buy item");
+    const nonce = Math.random().toString(36).substring(7);
+    console.error(`Failed to update item state: ${nonce}`, e);
+    throw new Error(`Failed to update item state (nonce: ${nonce})`);
   }
 }
 

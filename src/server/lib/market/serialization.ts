@@ -1,16 +1,20 @@
-import type { AuctionedItem, ItemType } from "@prisma/client";
+import type { AuctionedItem, ItemType, User } from "@prisma/client";
 import type { ItemStack } from "elytra";
+import {
+  formatEnchantmentLevel,
+  formatEnchantmentName,
+} from "./enchantmentLang";
+import { MarketItemMetadata } from "./schemas";
 import { MarketUtils } from "./utils";
 
 export interface PartialItemPayload {
   name: string;
   image: string;
   type: string;
+  amount: number;
 }
 
 export interface ItemPayload extends PartialItemPayload {
-  amount: number;
-
   /**
    * The inventory index of the un-abstracted item
    */
@@ -60,6 +64,11 @@ export interface DiscoveredItemPayload extends PartialItemPayload {
      * The auctioned item id
      */
     id: string;
+
+    /**
+     * The seller's name
+     */
+    name: string;
   }[];
 
   /**
@@ -72,12 +81,24 @@ export interface DiscoveredItemPayload extends PartialItemPayload {
      * The auctioned item id
      */
     id: string;
+
+    /**
+     * The seller's name
+     */
+    name: string;
   } | null;
+
+  /**
+   * The enchantments on the item
+   */
+  enchantments: string[];
 }
 
 function serializeDiscoveredItem(
   item: ItemType & {
-    stock: AuctionedItem[];
+    stock: (AuctionedItem & {
+      seller: User;
+    })[];
   }
 ): DiscoveredItemPayload {
   const cheapest =
@@ -87,19 +108,30 @@ function serializeDiscoveredItem(
         )
       : null;
 
+  const metadata = MarketItemMetadata.parse(item.metadata);
+
   return {
     name: item.name,
+    amount: metadata.amount,
+    enchantments: metadata.enchantments.map(
+      (enchantment) =>
+        `${formatEnchantmentName(enchantment.id)} ${formatEnchantmentLevel(
+          enchantment.level
+        )}`
+    ),
     image: MarketUtils.items.findItemTexture(item.namespacedId),
     type: item.id,
     sellers: item.stock.map((stock) => ({
       price: stock.price,
       id: stock.id,
+      name: stock.seller.name || "Unknown",
     })),
     id: item.b64key,
     cheapest: cheapest
       ? {
           price: cheapest.price,
           id: cheapest.id,
+          name: cheapest.seller.name || "Unknown",
         }
       : null,
   };
