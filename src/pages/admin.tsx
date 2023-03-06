@@ -150,6 +150,7 @@ const Admin: NextPage = () => {
                   <Mui.TableCell>Discord</Mui.TableCell>
                   <Mui.TableCell>Minecraft</Mui.TableCell>
                   <Mui.TableCell>Alts</Mui.TableCell>
+                  <Mui.TableCell>Supporter Until</Mui.TableCell>
                   <Mui.TableCell>Member</Mui.TableCell>
                 </Mui.TableRow>
               </Mui.TableHead>
@@ -174,6 +175,24 @@ const Admin: NextPage = () => {
                           <Mui.Typography>{alt.username}</Mui.Typography>
                         </Mui.Tooltip>
                       ))}
+                    </Mui.TableCell>
+                    <Mui.TableCell>
+                      {user.supporterUntil ? (
+                        <Mui.Tooltip
+                          title={new Date(user.supporterUntil).toLocaleString()}
+                        >
+                          <Mui.Typography>
+                            {Math.ceil(
+                              (new Date(user.supporterUntil).getTime() -
+                                new Date().getTime()) /
+                                (1000 * 3600 * 24)
+                            )}{" "}
+                            days
+                          </Mui.Typography>
+                        </Mui.Tooltip>
+                      ) : (
+                        "N/A"
+                      )}
                     </Mui.TableCell>
                     <Mui.TableCell>
                       <button onClick={() => handleRefreshUser(user)}>
