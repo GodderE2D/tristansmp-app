@@ -69,6 +69,8 @@ model User {
   signShops               SignShop[]
 
   supporterUntil DateTime? // If this isn't null, the user is a supporter until this date
+  blogBooks      BlogBook[]
+  oneTimeTokens  OneTimeToken[]
 }
 
 model MinecraftAlternativeAccount {
@@ -198,4 +200,41 @@ model Image {
   reviewer     String?
 
   @@index([creatorId])
+}
+
+model BlogBook {
+  id String @id @default(cuid())
+
+  title String
+
+  content String @db.Text
+
+  author   User   @relation(fields: [authorId], references: [id])
+  authorId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([authorId])
+}
+
+model CacheKV {
+  key   String @id
+  value String @db.Text
+
+  createdAt DateTime @default(now())
+}
+
+model OneTimeToken {
+  id String @id @default(cuid())
+
+  token String @unique
+
+  createdAt DateTime @default(now())
+  expires   DateTime
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  @@index([userId])
 }

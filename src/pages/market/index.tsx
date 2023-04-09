@@ -3,6 +3,7 @@ import { PlusIcon, QuestionMarkCircleIcon } from "@heroicons/react/24/outline";
 import * as Mui from "@mui/material";
 import { type NextPage } from "next";
 import { signIn, useSession } from "next-auth/react";
+import { NextSeo } from "next-seo";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import Diamond from "../../../public/assets/images/minecraft/diamond.png";
@@ -54,16 +55,12 @@ const Market: NextPage = () => {
     }
   }, [discoveredItemTypesQuery.data, showItemsWithoutStock]);
 
-  if (sessionStatus === "loading") {
-    return <div>Loading...</div>;
-  }
-
-  if (!sessionData) {
-    return <div>Not signed in</div>;
-  }
-
   return (
     <>
+      <NextSeo
+        title="TSMP: Market"
+        description="Sell & Buy in-game items for in-game diamonds."
+      />
       <Mui.Container>
         <Mui.Grid container spacing={3}>
           <div></div>
@@ -207,7 +204,7 @@ const Market: NextPage = () => {
                       <Mui.TableCell align="right">
                         Cheapest Price
                       </Mui.TableCell>
-                      <Mui.TableCell align="right">Sellers</Mui.TableCell>
+                      <Mui.TableCell align="right">Quantity</Mui.TableCell>
                     </Mui.TableRow>
                   </Mui.TableHead>
                   <Mui.TableBody>

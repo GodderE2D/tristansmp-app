@@ -5,7 +5,6 @@ import {
   formatEnchantmentName,
 } from "./enchantmentLang";
 import { MarketItemMetadata } from "./schemas";
-import { MarketUtils } from "./utils";
 
 export interface PartialItemPayload {
   name: string;
@@ -25,7 +24,7 @@ function serializeItem(item: ItemStack, index: number): ItemPayload {
   return {
     name: item.name,
     amount: item.amount,
-    image: MarketUtils.items.findItemTexture(item.id),
+    image: `/api/i/${item.id}`,
     type: item.id,
     index: index,
   };
@@ -92,6 +91,13 @@ export interface DiscoveredItemPayload extends PartialItemPayload {
    * The enchantments on the item
    */
   enchantments: string[];
+
+  lore: string[];
+
+  /**
+   * The namespaced id of the item
+   */
+  namespacedId: string;
 }
 
 function serializeDiscoveredItem(
@@ -119,8 +125,10 @@ function serializeDiscoveredItem(
           enchantment.level
         )}`
     ),
-    image: MarketUtils.items.findItemTexture(item.namespacedId),
+    lore: metadata.lore,
+    image: `/api/i/${item.namespacedId}`,
     type: item.id,
+    namespacedId: item.namespacedId,
     sellers: item.stock.map((stock) => ({
       price: stock.price,
       id: stock.id,

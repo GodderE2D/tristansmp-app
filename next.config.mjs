@@ -20,12 +20,28 @@ const config = {
     defaultLocale: "en",
   },
   images: {
-    domains: ["cdn.discordapp.com", "cdn.tristancamejo.com"],
+    domains: [
+      "cdn.discordapp.com",
+      "cdn.tristancamejo.com",
+      "www.notion.so",
+      "notion.so",
+      "s3.us-west-2.amazonaws.com",
+    ],
   },
   redirects: async () => [
     {
       source: "/discord",
       destination: "https://discord.gg/yzNjMhzw8s",
+      permanent: true,
+    },
+    {
+      source: "/join",
+      destination: "/blog/join",
+      permanent: true,
+    },
+    {
+      source: "/supporter",
+      destination: "/docs/supporter",
       permanent: true,
     },
   ],
